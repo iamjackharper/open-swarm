@@ -18,8 +18,8 @@ def print_account_details(context_variables: dict):
 agent = Agent(
     name="Agent",
     instructions=instructions,
-    functions=[print_account_details],
-)
+    functions=[print_account_details]
+    )
 
 context_variables = {"name": "James", "user_id": 123}
 

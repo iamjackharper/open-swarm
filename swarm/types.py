@@ -3,7 +3,7 @@ from openai.types.chat.chat_completion_message_tool_call import (
     ChatCompletionMessageToolCall,
     Function,
 )
-from typing import List, Callable, Union, Optional
+from typing import List, Callable, Union, Optional, Type
 
 # Third-party imports
 from pydantic import BaseModel
@@ -16,8 +16,12 @@ class Agent(BaseModel):
     model: str = "gpt-4o"
     instructions: Union[str, Callable[[], str]] = "You are a helpful agent."
     functions: List[AgentFunction] = []
-    tool_choice: str = None
-    parallel_tool_calls: bool = True
+    tool_choice: str = "auto"
+    parallel_tool_calls: bool = None 
+    temperature: Optional[float] = None
+    max_completion_tokens: Optional[int] = None
+    response_format: Optional[Type[BaseModel]] = None
+    top_p: Optional[float] = None
 
 
 class Response(BaseModel):

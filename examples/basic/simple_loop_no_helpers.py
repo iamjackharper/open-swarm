@@ -5,6 +5,9 @@ client = Swarm()
 my_agent = Agent(
     name="Agent",
     instructions="You are a helpful agent.",
+    #model="claude-3-5-sonnet-20240620",
+    model="groq/llama-3.3-70b-versatile",
+    max_tokens=1024
 )
 
 

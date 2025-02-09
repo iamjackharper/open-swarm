@@ -1,8 +1,22 @@
 ![Swarm Logo](assets/logo.png)
 
-# Swarm (experimental, educational)
+# Open-Swarm
 
-An educational framework exploring ergonomic, lightweight multi-agent orchestration.
+An experimental, open-source framework for orchestrating multi-agent systems powered by language models. Built to work seamlessly with any LLM provider - whether cloud-based, local, or hybrid - while maintaining a lightweight and intuitive interface for agent coordination.
+
+## Note
+ Open-Swarm is a fork of OpenAI's Swarm framework, modified to work with any Language Model provider while maintaining the same ergonomic patterns for multi-agent orchestration.
+
+## Features
+
+- 🔄 Compatible with multiple LLM providers (OpenAI, Anthropic, Ollama, etc.)
+- 🤝 Simple agent coordination and handoffs
+- 🛠️ Flexible function calling
+- 🎯 Fine-grained control over agent parameters (temperature, top_p, max_tokens, etc.)
+- 🔄 Streaming support
+- 🔷 Structured Output support
+- 📚 Educational and experimental focus
+
 
 > [!WARNING]
 > Swarm is currently an experimental sample framework intended to explore ergonomic interfaces for multi-agent systems. It is not intended to be used in production, and therefore has no official support. (This also means we will not be reviewing PRs or issues!)
@@ -14,50 +28,109 @@ An educational framework exploring ergonomic, lightweight multi-agent orchestrat
 Requires Python 3.10+
 
 ```shell
-pip install git+ssh://git@github.com/openai/swarm.git
+pip install git+ssh://git@github.com/iamjackharper/open-swarm.git
 ```
 
 or
 
 ```shell
-pip install git+https://github.com/openai/swarm.git
+pip install git+https://github.com/iamjackharper/open-swarm.git
 ```
 
 ## Usage
+```python
+# Set your ENV variables
+os.environ["OPENAI_API_KEY"] = "your-openai-key"
+os.environ["ANTHROPIC_API_KEY"] = "your-anthropic-key"
+os.environ['DEEPSEEK_API_KEY'] = "your-deepseek-key"
+```
 
+This project uses the LiteLLM library for interacting with various LLM providers. For a complete list of supported providers and models, please visit [LiteLLM's provider documentation](https://docs.litellm.ai/docs/providers).
+
+## Example with Basic Handoff
 ```python
 from swarm import Swarm, Agent
 
 client = Swarm()
 
+english_agent = Agent(
+    name="English Agent",
+    instructions="You only speak English.",
+    model="claude-3-5-sonnet-20240620"
+)
+
+spanish_agent = Agent(
+    name="Spanish Agent",
+    instructions="You only speak Spanish."    
+)
+
+
+def transfer_to_spanish_agent():
+    """Transfer spanish speaking users immediately."""
+    return spanish_agent
+
+
+english_agent.functions.append(transfer_to_spanish_agent)
+
+messages = [{"role": "user", "content": "Hola. ¿Como estás?"}]
+response = client.run(agent=english_agent, messages=messages)
+
+print(response.messages[-1]["content"])
+```
+```
+¡Hola! Estoy bien, gracias. ¿Y tú? ¿En qué puedo ayudarte hoy?
+```
+## Example with Structured Output
+```python
+from swarm import Swarm, Agent
+from pydantic import BaseModel
+
+client = Swarm()
+
 def transfer_to_agent_b():
+    """Transfer task to calendar manager agent"""
     return agent_b
+
+class CalendarEvent(BaseModel):
+    name: str
+    date: str
+    participants: list[str]
 
 
 agent_a = Agent(
     name="Agent A",
     instructions="You are a helpful agent.",
     functions=[transfer_to_agent_b],
+    model="claude-3-5-sonnet-20240620" # Optional, defaults to gpt-4o
 )
 
 agent_b = Agent(
     name="Agent B",
-    instructions="Only speak in Haikus.",
+    instructions="Only answer in Json format.",
+    response_format=CalendarEvent,
+    temperature=0.5,
+    model="groq/llama-3.3-70b-versatile"
 )
 
 response = client.run(
     agent=agent_a,
-    messages=[{"role": "user", "content": "I want to talk to agent B."}],
+    messages=[{"role": "user", "content": "Set me up a meeting with John and Jane on the 21st of March."}],
 )
 
 print(response.messages[-1]["content"])
 ```
+```
+{
+    "name": "Meeting with John and Jane",
+    "date": "2024-03-21",
+    "participants": [
+        "John",
+        "Jane"
+    ]
+}
+```
 
-```
-Hope glimmers brightly,
-New paths converge gracefully,
-What can I assist?
-```
+Check if your model supports structured outputs before passing the optional response_format parameter.
 
 ## Table of Contents
 
@@ -156,13 +229,19 @@ While it's tempting to personify an `Agent` as "someone who does X", it can also
 
 ## `Agent` Fields
 
-| Field            | Type                     | Description                                                                   | Default                      |
-| ---------------- | ------------------------ | ----------------------------------------------------------------------------- | ---------------------------- |
-| **name**         | `str`                    | The name of the agent.                                                        | `"Agent"`                    |
-| **model**        | `str`                    | The model to be used by the agent.                                            | `"gpt-4o"`                   |
-| **instructions** | `str` or `func() -> str` | Instructions for the agent, can be a string or a callable returning a string. | `"You are a helpful agent."` |
-| **functions**    | `List`                   | A list of functions that the agent can call.                                  | `[]`                         |
-| **tool_choice**  | `str`                    | The tool choice for the agent, if any.                                        | `None`                       |
+| Field | Type | Description | Default |
+|-----------|------|-------------|---------|
+| **name** | str | Agent name | "Agent" |
+| **model** | str | LLM model to use | "gpt-4o" |
+| **instructions** | str or func() -> str | Instructions for the agent, can be a string or a callable returning a string. | "You are a helpful agent." |
+| **functions** | List | Available functions | [] |
+| **tool_choice** | str | Tool choice behavior | "auto" |
+| **parallel_tool_calls** | bool | Enable parallel function calls | None
+| **temperature** | float | Response temperature | None |
+| **max_completion_tokens** | int | Max completion tokens | None |
+| **response_format** | Pydantic BaseModel | Response format specification | None |
+| **top_p** | float | Top-p sampling parameter | None |
+
 
 ### Instructions
 

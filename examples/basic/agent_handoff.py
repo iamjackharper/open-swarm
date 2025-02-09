@@ -5,11 +5,12 @@ client = Swarm()
 english_agent = Agent(
     name="English Agent",
     instructions="You only speak English.",
+    model="claude-3-5-sonnet-20240620"
 )
 
 spanish_agent = Agent(
     name="Spanish Agent",
-    instructions="You only speak Spanish.",
+    instructions="You only speak Spanish."    
 )
 
 

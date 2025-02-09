@@ -1,12 +1,8 @@
 # Standard library imports
+from collections import defaultdict
 import copy
 import json
-from collections import defaultdict
-from typing import List, Callable, Union
-
-# Package/library imports
-from openai import OpenAI
-
+from typing import List, Optional
 
 # Local imports
 from .util import function_to_json, debug_print, merge_chunk
@@ -20,14 +16,15 @@ from .types import (
     Result,
 )
 
+import litellm
+litellm.modify_params = True
+litellm.drop_params = True # Drop any unmapped params
+
 __CTX_VARS_NAME__ = "context_variables"
 
-
 class Swarm:
-    def __init__(self, client=None):
-        if not client:
-            client = OpenAI()
-        self.client = client
+    def __init__(self, config_path: Optional[str] = None):
+       pass
 
     def get_chat_completion(
         self,
@@ -44,9 +41,17 @@ class Swarm:
             if callable(agent.instructions)
             else agent.instructions
         )
-        messages = [{"role": "system", "content": instructions}] + history
+        messages = [{"role": "system", "content": instructions}]
+        for msg in history:
+            # Converti il messaggio Pydantic in dizionario e poi crea una copia
+            msg_dict = msg.dict() if hasattr(msg, 'dict') else dict(msg)
+            msg_copy = msg_dict.copy()
+            msg_copy.pop('sender', None)  # Rimuove sender temporaneamente
+            messages.append(msg_copy)
+        
         debug_print(debug, "Getting chat completion for...:", messages)
 
+        # Prepare tools for the chat completion
         tools = [function_to_json(f) for f in agent.functions]
         # hide context_variables from model
         for tool in tools:
@@ -55,24 +60,32 @@ class Swarm:
             if __CTX_VARS_NAME__ in params["required"]:
                 params["required"].remove(__CTX_VARS_NAME__)
 
-        create_params = {
-            "model": model_override or agent.model,
-            "messages": messages,
-            "tools": tools or None,
-            "tool_choice": agent.tool_choice,
-            "stream": stream,
+        # Prepare params for the chat completion
+        optional_params = {
+            "response_format": agent.response_format,
+            "temperature": agent.temperature,
+            "max_completion_tokens": agent.max_completion_tokens,
+            "response_format": agent.response_format,
+            "top_p": agent.top_p,
+            
         }
-
+        create_params = {
+            "messages": messages,
+            "model": model_override or agent.model,
+            "stream": stream,
+            **{k: v for k, v in optional_params.items() if v is not None}
+        }
+        
         if tools:
             create_params["parallel_tool_calls"] = agent.parallel_tool_calls
-
-        return self.client.chat.completions.create(**create_params)
+            create_params["tools"] = tools
+            create_params["tool_choice"] = agent.tool_choice
+        return litellm.completion(**create_params)
 
     def handle_function_result(self, result, debug) -> Result:
         match result:
             case Result() as result:
                 return result
-
             case Agent() as agent:
                 return Result(
                     value=json.dumps({"assistant": agent.name}),
@@ -98,7 +111,7 @@ class Swarm:
             messages=[], agent=None, context_variables={})
 
         for tool_call in tool_calls:
-            name = tool_call.function.name
+            name = tool_call.function.name 
             # handle missing tool case, skip to next tool
             if name not in function_map:
                 debug_print(debug, f"Tool {name} not found in function map.")
@@ -111,6 +124,7 @@ class Swarm:
                     }
                 )
                 continue
+            
             args = json.loads(tool_call.function.arguments)
             debug_print(
                 debug, f"Processing tool call: {name} with arguments {args}")
@@ -152,7 +166,6 @@ class Swarm:
         init_len = len(messages)
 
         while len(history) - init_len < max_turns:
-
             message = {
                 "content": "",
                 "sender": agent.name,
@@ -179,13 +192,14 @@ class Swarm:
 
             yield {"delim": "start"}
             for chunk in completion:
-                delta = json.loads(chunk.choices[0].delta.json())
-                if delta["role"] == "assistant":
-                    delta["sender"] = active_agent.name
-                yield delta
-                delta.pop("role", None)
-                delta.pop("sender", None)
-                merge_chunk(message, delta)
+                delta = chunk["choices"][0]["delta"]
+                delta_dict = delta.dict() if hasattr(delta, 'dict') else dict(delta)
+                if delta_dict.get("role") == "assistant":
+                    delta_dict["sender"] = active_agent.name
+                yield delta_dict
+                delta_dict.pop("role", None)
+                delta_dict.pop("sender", None)
+                merge_chunk(message, delta_dict)
             yield {"delim": "end"}
 
             message["tool_calls"] = list(
@@ -249,13 +263,13 @@ class Swarm:
                 max_turns=max_turns,
                 execute_tools=execute_tools,
             )
+
         active_agent = agent
         context_variables = copy.deepcopy(context_variables)
         history = copy.deepcopy(messages)
         init_len = len(messages)
 
         while len(history) - init_len < max_turns and active_agent:
-
             # get completion with current history, agent
             completion = self.get_chat_completion(
                 agent=active_agent,
@@ -265,20 +279,18 @@ class Swarm:
                 stream=stream,
                 debug=debug,
             )
-            message = completion.choices[0].message
-            debug_print(debug, "Received completion:", message)
-            message.sender = active_agent.name
-            history.append(
-                json.loads(message.model_dump_json())
-            )  # to avoid OpenAI types (?)
 
-            if not message.tool_calls or not execute_tools:
+            message = completion["choices"][0]["message"]
+            debug_print(debug, "Received completion:", message)
+            message["sender"] = active_agent.name
+            history.append(message)
+            if not message.get("tool_calls") or not execute_tools:
                 debug_print(debug, "Ending turn.")
                 break
 
             # handle function calls, updating context_variables, and switching agents
             partial_response = self.handle_tool_calls(
-                message.tool_calls, active_agent.functions, context_variables, debug
+                message["tool_calls"], active_agent.functions, context_variables, debug
             )
             history.extend(partial_response.messages)
             context_variables.update(partial_response.context_variables)
