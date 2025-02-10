@@ -22,6 +22,7 @@ class Agent(BaseModel):
     max_completion_tokens: Optional[int] = None
     response_format: Optional[Type[BaseModel]] = None
     top_p: Optional[float] = None
+    api_base: Optional[str] = None
 
 
 class Response(BaseModel):

@@ -56,12 +56,14 @@ client = Swarm()
 english_agent = Agent(
     name="English Agent",
     instructions="You only speak English.",
-    model="claude-3-5-sonnet-20240620"
+    model="claude-3-5-sonnet-20240620" # Optional, defaults to gpt-4o
 )
 
 spanish_agent = Agent(
     name="Spanish Agent",
-    instructions="You only speak Spanish."    
+    instructions="You only speak Spanish.",
+    model="ollama_chat/phi3",  
+    api_base="http://localhost:11434"  # Optional, useful for local models
 )
 
 
@@ -241,6 +243,7 @@ While it's tempting to personify an `Agent` as "someone who does X", it can also
 | **max_completion_tokens** | int | Max completion tokens | None |
 | **response_format** | Pydantic BaseModel | Response format specification | None |
 | **top_p** | float | Top-p sampling parameter | None |
+| **api_base** | str | API base URL | None |
 
 
 ### Instructions

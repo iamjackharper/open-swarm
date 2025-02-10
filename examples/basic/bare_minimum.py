@@ -12,5 +12,5 @@ agent = Agent(
 
 messages = [{"role": "user", "content": "Hi! How are you?"}]
 
-response = client.run(agent, messages, stream=True)
+response = client.run(agent, messages)
 print(response.messages[-1]["content"])

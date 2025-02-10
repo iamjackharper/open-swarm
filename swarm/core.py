@@ -67,7 +67,7 @@ class Swarm:
             "max_completion_tokens": agent.max_completion_tokens,
             "response_format": agent.response_format,
             "top_p": agent.top_p,
-            
+            "api_base": agent.api_base,    
         }
         create_params = {
             "messages": messages,
